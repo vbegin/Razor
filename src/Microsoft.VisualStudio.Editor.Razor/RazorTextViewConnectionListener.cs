@@ -2,22 +2,22 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
-using System.Collections.ObjectModel;
+using System.Collections.Generic;
 using System.ComponentModel.Composition;
 using System.Diagnostics;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Razor;
-using Microsoft.VisualStudio.Editor.Razor;
+using Microsoft.VisualStudio.LanguageServices;
 using Microsoft.VisualStudio.Text;
 using Microsoft.VisualStudio.Text.Editor;
 using Microsoft.VisualStudio.Utilities;
 
-namespace Microsoft.VisualStudio.LanguageServices.Razor.Editor
+namespace Microsoft.VisualStudio.Editor.Razor
 {
     [ContentType(RazorLanguage.ContentType)]
     [TextViewRole(PredefinedTextViewRoles.Document)]
-    [Export(typeof(IWpfTextViewConnectionListener))]
-    internal class RazorTextViewConnectionListener : IWpfTextViewConnectionListener
+    [Export(typeof(ITextViewConnectionListener))]
+    internal class RazorTextViewConnectionListener : ITextViewConnectionListener
     {
         private readonly ForegroundDispatcher _foregroundDispatcher;
         private readonly RazorEditorFactoryService _editorFactoryService;
@@ -72,7 +72,7 @@ namespace Microsoft.VisualStudio.LanguageServices.Razor.Editor
 
         public Workspace Workspace => _workspace;
 
-        public void SubjectBuffersConnected(IWpfTextView textView, ConnectionReason reason, Collection<ITextBuffer> subjectBuffers)
+        public void SubjectBuffersConnected(ITextView textView, ConnectionReason reason, IReadOnlyCollection<ITextBuffer> subjectBuffers)
         {
             if (textView == null)
             {
@@ -86,16 +86,15 @@ namespace Microsoft.VisualStudio.LanguageServices.Razor.Editor
 
             _foregroundDispatcher.AssertForegroundThread();
 
-            for (var i = 0; i < subjectBuffers.Count; i++)
+            foreach (var textBuffer in subjectBuffers)
             {
-                var textBuffer = subjectBuffers[i];
                 if (!textBuffer.IsRazorBuffer())
                 {
                     continue;
                 }
 
                 if (!_editorFactoryService.TryGetDocumentTracker(textBuffer, out var documentTracker) ||
-                    !(documentTracker is DefaultVisualStudioDocumentTracker tracker))
+                    !(documentTracker is InternalVisualStudioDocumentTracker tracker))
                 {
                     Debug.Fail("Tracker should always be available given our expectations of the VS workflow.");
                     return;
@@ -105,7 +104,7 @@ namespace Microsoft.VisualStudio.LanguageServices.Razor.Editor
             }
         }
 
-        public void SubjectBuffersDisconnected(IWpfTextView textView, ConnectionReason reason, Collection<ITextBuffer> subjectBuffers)
+        public void SubjectBuffersDisconnected(ITextView textView, ConnectionReason reason, IReadOnlyCollection<ITextBuffer> subjectBuffers)
         {
             if (textView == null)
             {
@@ -124,11 +123,9 @@ namespace Microsoft.VisualStudio.LanguageServices.Razor.Editor
             //
             // Notice that this method is called *after* changes are applied to the text buffer(s). We need to check every
             // one of them for a tracker because the content type could have changed.
-            for (var i = 0; i < subjectBuffers.Count; i++)
+            foreach (var textBuffer in subjectBuffers)
             {
-                var textBuffer = subjectBuffers[i];
-
-                DefaultVisualStudioDocumentTracker documentTracker;
+                InternalVisualStudioDocumentTracker documentTracker;
                 if (textBuffer.Properties.TryGetProperty(typeof(VisualStudioDocumentTracker), out documentTracker))
                 {
                     documentTracker.RemoveTextView(textView);

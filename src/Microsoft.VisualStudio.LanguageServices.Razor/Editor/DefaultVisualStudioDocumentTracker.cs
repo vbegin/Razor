@@ -14,7 +14,7 @@ using Microsoft.VisualStudio.Text.Editor;
 
 namespace Microsoft.VisualStudio.LanguageServices.Razor.Editor
 {
-    internal class DefaultVisualStudioDocumentTracker : VisualStudioDocumentTracker
+    internal class DefaultVisualStudioDocumentTracker : InternalVisualStudioDocumentTracker
     {
         private readonly string _filePath;
         private readonly ProjectSnapshotManager _projectManager;
@@ -95,7 +95,7 @@ namespace Microsoft.VisualStudio.LanguageServices.Razor.Editor
 
         public override string ProjectPath => _projectPath;
 
-        internal void AddTextView(ITextView textView)
+        public override void AddTextView(ITextView textView)
         {
             if (textView == null)
             {
@@ -113,7 +113,7 @@ namespace Microsoft.VisualStudio.LanguageServices.Razor.Editor
             }
         }
 
-        internal void RemoveTextView(ITextView textView)
+        public override void RemoveTextView(ITextView textView)
         {
             if (textView == null)
             {

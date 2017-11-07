@@ -7,27 +7,16 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Razor;
 using Microsoft.CodeAnalysis.Razor.Editor;
 using Microsoft.CodeAnalysis.Razor.ProjectSystem;
-using Microsoft.VisualStudio.Editor.Razor;
-using Microsoft.VisualStudio.Shell.Interop;
 using Microsoft.VisualStudio.Text;
 using Microsoft.VisualStudio.Text.Editor;
 using Microsoft.VisualStudio.Utilities;
 using Moq;
 using Xunit;
 
-namespace Microsoft.VisualStudio.LanguageServices.Razor.Editor
+namespace Microsoft.VisualStudio.Editor.Razor
 {
     public class RazorTextViewConnectionListenerTest : ForegroundDispatcherTestBase
     {
-        private ProjectSnapshotManager ProjectManager { get; } = Mock.Of<ProjectSnapshotManager>(p => p.Projects == new List<ProjectSnapshot>());
-
-        private TextBufferProjectService ProjectService { get; } = Mock.Of<TextBufferProjectService>(
-            s => s.GetHierarchy(It.IsAny<ITextBuffer>()) == Mock.Of<IVsHierarchy>() &&
-            s.IsSupportedProject(It.IsAny<IVsHierarchy>()) == true &&
-                s.GetProjectPath(It.IsAny<IVsHierarchy>()) == "C:/Some/Path/TestProject.csproj");
-
-        private EditorSettingsManager EditorSettingsManager => new DefaultEditorSettingsManager();
-
         private Workspace Workspace { get; } = new AdhocWorkspace();
 
         private IContentType RazorContentType { get; } = Mock.Of<IContentType>(c => c.IsOfType(RazorLanguage.ContentType) == true);
@@ -40,7 +29,7 @@ namespace Microsoft.VisualStudio.LanguageServices.Razor.Editor
             // Arrange
             var editorFactoryService = new Mock<RazorEditorFactoryService>(MockBehavior.Strict);
             var factory = new RazorTextViewConnectionListener(Dispatcher, editorFactoryService.Object, Workspace);
-            var textView = Mock.Of<IWpfTextView>();
+            var textView = Mock.Of<ITextView>();
             var buffers = new Collection<ITextBuffer>()
             {
                 Mock.Of<ITextBuffer>(b => b.ContentType == NonRazorContentType && b.Properties == new PropertyCollection()),
@@ -54,12 +43,15 @@ namespace Microsoft.VisualStudio.LanguageServices.Razor.Editor
         public void SubjectBuffersConnected_ForRazorTextBuffer_AddsTextViewToTracker()
         {
             // Arrange
-            var textView = Mock.Of<IWpfTextView>();
+            var textView = Mock.Of<ITextView>();
             var buffers = new Collection<ITextBuffer>()
             {
                 Mock.Of<ITextBuffer>(b => b.ContentType == RazorContentType && b.Properties == new PropertyCollection()),
             };
-            VisualStudioDocumentTracker documentTracker = new DefaultVisualStudioDocumentTracker("AFile", ProjectManager, ProjectService, EditorSettingsManager, Workspace, buffers[0]);
+            var documentTrackerMock = new Mock<InternalVisualStudioDocumentTracker>(MockBehavior.Strict);
+            documentTrackerMock.Setup(tracker => tracker.AddTextView(textView))
+                .Verifiable();
+            VisualStudioDocumentTracker documentTracker = documentTrackerMock.Object;
             var editorFactoryService = Mock.Of<RazorEditorFactoryService>(factoryService => factoryService.TryGetDocumentTracker(It.IsAny<ITextBuffer>(), out documentTracker) == true);
             var textViewListener = new RazorTextViewConnectionListener(Dispatcher, editorFactoryService, Workspace);
 
@@ -67,15 +59,15 @@ namespace Microsoft.VisualStudio.LanguageServices.Razor.Editor
             textViewListener.SubjectBuffersConnected(textView, ConnectionReason.BufferGraphChange, buffers);
 
             // Assert
-            Assert.Collection(documentTracker.TextViews, v => Assert.Same(v, textView));
+            documentTrackerMock.Verify();
         }
 
         [ForegroundFact]
         public void SubjectBuffersDisconnected_ForAnyTextBufferWithTracker_RemovesTextView()
         {
             // Arrange
-            var textView1 = Mock.Of<IWpfTextView>();
-            var textView2 = Mock.Of<IWpfTextView>();
+            var textView1 = Mock.Of<ITextView>();
+            var textView2 = Mock.Of<ITextView>();
 
             var buffers = new Collection<ITextBuffer>()
             {
@@ -84,26 +76,23 @@ namespace Microsoft.VisualStudio.LanguageServices.Razor.Editor
             };
 
             // Preload the buffer's properties with a tracker, so it's like we've already tracked this one.
-            var tracker = new DefaultVisualStudioDocumentTracker("C:/File/Path/To/Tracker1.cshtml", ProjectManager, ProjectService, EditorSettingsManager, Workspace, buffers[0]);
-            tracker.AddTextView(textView1);
-            tracker.AddTextView(textView2);
-            buffers[0].Properties.AddProperty(typeof(VisualStudioDocumentTracker), tracker);
+            var tracker1 = new Mock<InternalVisualStudioDocumentTracker>(MockBehavior.Strict);
+            tracker1.Setup(tracker => tracker.RemoveTextView(textView2))
+                .Verifiable();
+            buffers[0].Properties.AddProperty(typeof(VisualStudioDocumentTracker), tracker1.Object);
 
-            tracker = new DefaultVisualStudioDocumentTracker("C:/File/Path/To/Tracker1.cshtml", ProjectManager, ProjectService, EditorSettingsManager, Workspace, buffers[1]);
-            tracker.AddTextView(textView1);
-            tracker.AddTextView(textView2);
-            buffers[1].Properties.AddProperty(typeof(VisualStudioDocumentTracker), tracker);
+            var tracker2 = new Mock<InternalVisualStudioDocumentTracker>(MockBehavior.Strict);
+            tracker2.Setup(tracker => tracker.RemoveTextView(textView2))
+                .Verifiable();
+            buffers[1].Properties.AddProperty(typeof(VisualStudioDocumentTracker), tracker2.Object);
             var textViewListener = new RazorTextViewConnectionListener(Dispatcher, Mock.Of<RazorEditorFactoryService>(), Workspace);
 
             // Act
             textViewListener.SubjectBuffersDisconnected(textView2, ConnectionReason.BufferGraphChange, buffers);
 
             // Assert
-            tracker = buffers[0].Properties.GetProperty<DefaultVisualStudioDocumentTracker>(typeof(VisualStudioDocumentTracker));
-            Assert.Collection(tracker.TextViews, v => Assert.Same(v, textView1));
-
-            tracker = buffers[1].Properties.GetProperty<DefaultVisualStudioDocumentTracker>(typeof(VisualStudioDocumentTracker));
-            Assert.Collection(tracker.TextViews, v => Assert.Same(v, textView1));
+            tracker1.Verify();
+            tracker2.Verify();
         }
 
         [ForegroundFact]
@@ -112,7 +101,7 @@ namespace Microsoft.VisualStudio.LanguageServices.Razor.Editor
             // Arrange
             var textViewListener = new RazorTextViewConnectionListener(Dispatcher, Mock.Of<RazorEditorFactoryService>(), Workspace);
 
-            var textView = Mock.Of<IWpfTextView>();
+            var textView = Mock.Of<ITextView>();
 
             var buffers = new Collection<ITextBuffer>()
             {
