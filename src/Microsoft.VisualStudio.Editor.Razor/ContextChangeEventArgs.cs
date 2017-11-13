@@ -5,7 +5,7 @@ using System;
 
 namespace Microsoft.VisualStudio.Editor.Razor
 {
-    public class ContextChangeEventArgs : EventArgs
+    public sealed class ContextChangeEventArgs : EventArgs
     {
         public ContextChangeEventArgs(ContextChangeKind kind)
         {
