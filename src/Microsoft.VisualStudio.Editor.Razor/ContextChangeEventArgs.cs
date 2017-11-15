@@ -12,6 +12,6 @@ namespace Microsoft.VisualStudio.Editor.Razor
             Kind = kind;
         }
 
-        public ContextChangeKind Kind { get; set; }
+        public ContextChangeKind Kind { get; }
     }
 }

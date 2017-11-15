@@ -83,7 +83,7 @@ namespace Microsoft.VisualStudio.LanguageServices.Razor.Editor
             string filePath,
             ProjectSnapshotManager projectManager,
             TextBufferProjectService projectService,
-            EditorSettingsManager editorSettingsManager,
+            EditorSettingsManagerInternal editorSettingsManager,
             Workspace workspace,
             ITextBuffer textBuffer,
             string projectPath) : this(filePath, projectManager, projectService, editorSettingsManager, workspace, textBuffer)
@@ -91,11 +91,11 @@ namespace Microsoft.VisualStudio.LanguageServices.Razor.Editor
             _projectPath = projectPath;
         }
 
-        internal override ProjectExtensibilityConfiguration Configuration => _project.Configuration;
+        internal override ProjectExtensibilityConfiguration Configuration => _project?.Configuration;
 
         public override EditorSettings EditorSettings => _editorSettingsManager.Current;
 
-        public override IReadOnlyList<TagHelperDescriptor> TagHelpers => _project?.TagHelpers;
+        public override IReadOnlyList<TagHelperDescriptor> TagHelpers => _project?.TagHelpers ?? Array.Empty<TagHelperDescriptor>();
 
         public override bool IsSupportedProject => _isSupportedProject;
 
