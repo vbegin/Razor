@@ -21,6 +21,7 @@ namespace Microsoft.VisualStudio.LanguageServices.Razor.Editor
         private readonly ProjectSnapshotManager _projectManager;
         private readonly EditorSettingsManagerInternal _editorSettingsManager;
         private readonly TextBufferProjectService _projectService;
+        private readonly VisualStudioOpenDocumentManager _documentManager;
         private readonly ITextBuffer _textBuffer;
         private readonly List<ITextView> _textViews;
         private readonly Workspace _workspace;
@@ -36,7 +37,8 @@ namespace Microsoft.VisualStudio.LanguageServices.Razor.Editor
             TextBufferProjectService projectService,
             EditorSettingsManagerInternal editorSettingsManager,
             Workspace workspace,
-            ITextBuffer textBuffer)
+            ITextBuffer textBuffer,
+            VisualStudioOpenDocumentManager documentManager)
         {
             if (string.IsNullOrEmpty(filePath))
             {
@@ -68,11 +70,17 @@ namespace Microsoft.VisualStudio.LanguageServices.Razor.Editor
                 throw new ArgumentNullException(nameof(textBuffer));
             }
 
+            if (documentManager == null)
+            {
+                throw new ArgumentNullException(nameof(documentManager));
+            }
+
             _filePath = filePath;
             _projectManager = projectManager;
             _projectService = projectService;
             _editorSettingsManager = editorSettingsManager;
             _textBuffer = textBuffer;
+            _documentManager = documentManager;
             _workspace = workspace; // For now we assume that the workspace is the always default VS workspace.
 
             _textViews = new List<ITextView>();
@@ -86,7 +94,8 @@ namespace Microsoft.VisualStudio.LanguageServices.Razor.Editor
             EditorSettingsManagerInternal editorSettingsManager,
             Workspace workspace,
             ITextBuffer textBuffer,
-            string projectPath) : this(filePath, projectManager, projectService, editorSettingsManager, workspace, textBuffer)
+            VisualStudioOpenDocumentManager documentManager,
+            string projectPath) : this(filePath, projectManager, projectService, editorSettingsManager, workspace, textBuffer, documentManager)
         {
             _projectPath = projectPath;
         }
@@ -193,6 +202,8 @@ namespace Microsoft.VisualStudio.LanguageServices.Razor.Editor
             _editorSettingsManager.Changed += EditorSettingsManager_Changed;
 
             OnContextChanged(_project, ContextChangeKind.ProjectChanged);
+
+            _documentManager.AddDocument(this);
         }
 
         private void Unsubscribe()
@@ -204,6 +215,8 @@ namespace Microsoft.VisualStudio.LanguageServices.Razor.Editor
             _isSupportedProject = false;
             _project = null;
             OnContextChanged(project: null, kind: ContextChangeKind.ProjectChanged);
+
+            _documentManager.RemoveDocument(this);
         }
 
         private void OnContextChanged(ProjectSnapshot project, ContextChangeKind kind)
